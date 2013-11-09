@@ -1,7 +1,7 @@
 #include <iostream>
 #include <locale>
 
-#include <xqilla/utils/XQillaPlatformUtils.hpp>
+#include <xercesc/util/PlatformUtils.hpp>
 
 #include "MarkdownCpp.h"
 #include "extensions/tables.h"
@@ -11,11 +11,11 @@ class Initializer
 public:
     Initializer(void)
     {
-        XQillaPlatformUtils::initialize();
+        xercesc::XMLPlatformUtils::Initialize();
     }
     ~Initializer(void)
     {
-        XQillaPlatformUtils::terminate();
+        xercesc::XMLPlatformUtils::Terminate();
     }
 
 };
