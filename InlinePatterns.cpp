@@ -7,9 +7,13 @@
 
 #include "InlinePatterns.h"
 
+#ifdef USE_QT
 #include <QUrl>
 #if QT_VERSION < QT_VERSION_CHECK(5,0,0)
 #include <QTextDocument>
+#endif
+#else
+#include "htmlentitydefs.hpp"
 #endif
 
 #include <utility>
@@ -146,9 +150,17 @@ public:
         }
         wchar_t ch = text.at(0);
         if ( this->markdown->ESCAPED_CHARS.find(ch) != this->markdown->ESCAPED_CHARS.end() ) {
+#ifdef USE_QT
             QString str = QString::fromStdWString(text);
             QChar c = str.at(0);
-            return (boost::wformat(L"%s%s%s")%util::STX%c.unicode()%util::ETX).str();
+            return (boost::wformat(L"%s%d%s")%util::STX%c.unicode()%util::ETX).str();
+#else
+# ifdef __STDC_ISO_10646__
+            return (boost::wformat(L"%s%d%s")%util::STX%static_cast<unsigned short>(ch)%util::ETX).str();
+#else
+#error "compiler not supported."
+#endif
+#endif
         } else {
             return (boost::wformat(L"\\%s")%text).str();
         }
@@ -366,9 +378,10 @@ public:
             //! Return immediately bipassing parsing.
             return result;
         }
-        QUrl qurl(QString::fromStdWString(result));
         std::set<std::wstring> locless_schemes = {L"", L"mailto", L"news"};
         std::set<std::wstring> allowed_schemes = {L"", L"mailto", L"news", L"http", L"https", L"ftp", L"ftps"};
+#ifdef USE_QT
+        QUrl qurl(QString::fromStdWString(result));
         if ( allowed_schemes.find(qurl.scheme().toStdWString()) == allowed_schemes.end() ) {
             //! Not a known (allowed) scheme. Not safe.
             return std::wstring();
@@ -388,6 +401,34 @@ public:
         }
         //! Url passes all tests. Return url as-is.
         return qurl.toString().toStdWString();
+#else
+        std::size_t pos;
+        if ( (pos = result.find(L":")) == std::wstring::npos ) {
+            return std::wstring();
+        }
+        std::wstring scheme = result.substr(0, pos);
+        if ( allowed_schemes.find(scheme) == allowed_schemes.end() ) {
+            //! Not a known (allowed) scheme. Not safe.
+            return std::wstring();
+        }
+        boost::wsmatch m;
+        bool ret = false;
+        if ( ! (ret = boost::regex_match(result, m, boost::wregex(L"[a-zA-Z][a-zA-Z0-9+\\-.]*://[^/]+/?(.*)"))) && locless_schemes.find(scheme) == locless_schemes.end() ) {
+            //! This should not happen. Treat as suspect.
+            return std::wstring();
+        }
+        std::wstring path;
+        if ( ret ) {
+            path = m.str(1);
+        } else {
+            ++pos;
+            path = result.substr(pos, result.size()-pos);
+        }
+        if ( path.find(L":") != std::wstring::npos ) {
+            return std::wstring();
+        }
+        return result;
+#endif
     }
 
     virtual std::wstring type(void) const
@@ -569,16 +610,17 @@ public:
             email = email.substr(7, email.size()-7);
         }
 
-#if QT_VERSION < QT_VERSION_CHECK(5,0,0)
+#ifdef USE_QT
+        //! html escape
+# if QT_VERSION < QT_VERSION_CHECK(5,0,0)
         QString qstr = QString::fromStdWString(email);
-        email = Qt::escape(qstr).toStdWString();
-#else
+        std::wstring letters = Qt::escape(qstr).toStdWString();
+# else
         QString qstr = QString::fromStdWString(email);
-        email = qstr.toHtmlEscaped().toStdWString();
-#endif
-
+        std::wstring letters = qstr.toHtmlEscaped().toStdWString();
+# endif
+        //! code escape
         std::wstring mailto = L"mailto:"+email;
-
         QString tmp = QString::fromStdWString(mailto);
         QString buff;
         for ( int i = 0; i < tmp.size(); ++i ) {
@@ -586,9 +628,41 @@ public:
             buff.append(QString("#%1%2;").arg(QString::fromStdWString(util::AMP_SUBSTITUTE), QString::number(ch.unicode())));
         }
         mailto = buff.toStdWString();
+#else
+        //! html escape
+        /*!
+         * Return entity definition by code, or the code if not defined.
+         */
+        auto codepoint2name = [](wchar_t wch) -> std::wstring {
+            if ( markdown::codepoint2name.find(wch) != markdown::codepoint2name.end() ) {
+                return (boost::wformat(L"%s%s;")%util::AMP_SUBSTITUTE%markdown::codepoint2name[wch]).str();
+            } else {
+# ifdef __STDC_ISO_10646__
+                return (boost::wformat(L"%s#%d;")%util::AMP_SUBSTITUTE%static_cast<unsigned short>(wch)).str();
+# else
+#  error "compiler is not supported."
+# endif
+            }
+        };
+        std::wstring letters;
+        for ( wchar_t letter : email ) {
+            letters.append(codepoint2name(letter));
+        }
+        //! code escape
+        std::wstring mailto = L"mailto:"+email;
+        std::wstring buff;
+        for ( wchar_t letter : mailto ) {
+# ifdef __STDC_ISO_10646__
+            buff.append(util::AMP_SUBSTITUTE + (boost::wformat(L"#%d;")%static_cast<unsigned short>(letter)).str());
+# else
+#  error "compiler is not supported."
+# endif
+        }
+        mailto = buff;
+#endif
 
         el.setAttribute(L"href", this->unescape(mailto));
-        el.setText(email);
+        el.setText(letters);
         return el;
     }
 
