@@ -12,20 +12,9 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 
-#include <QDebug>
-
 #include "MarkdownCpp.h"
 
 namespace markdown{
-
-//! from http://stackoverflow.com/questions/1339121/how-to-reverse-a-qlist
-template<typename T>
-QList<T> reversed( const QList<T> & in ) {
-    QList<T> result;
-    result.reserve( in.size() ); // reserve is new in Qt 4.7
-    std::reverse_copy( in.begin(), in.end(), std::back_inserter( result ) );
-    return result;
-}
 
 template<typename T>
 void append(std::list<T>& dest, const std::list<T> &src)
@@ -452,7 +441,7 @@ private:
             }
             return tree;
         } catch (...) {
-            qDebug() << "TreeProcessor::run() exception.";
+            std::cerr << "TreeProcessor::run() exception." << std::endl;
         }
         this->class_root = ElementTree::InvalidElementTree;
         return Element::InvalidElement;
