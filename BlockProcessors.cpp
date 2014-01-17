@@ -7,8 +7,6 @@
 
 #include "BlockProcessors.h"
 
-#include <QDebug>
-
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
@@ -553,7 +551,7 @@ public:
             }
         } else {
             //! This should never happen, but just in case...
-            qDebug() << "We've got a problem header: " << QString::fromStdWString(block);
+            std::wcerr << L"We've got a problem header: " << block << std::endl;
         }
     }
 
